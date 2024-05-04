@@ -12,33 +12,87 @@ import (
 	"time"
 )
 
-// get own gamedata (among other things)
-func GetObjectInfosByDataStoreSearchParam(param *types.DataStoreSearchParam, pid *nextypes.PID) ([]*types.DataStoreMetaInfo, uint32, *nex.Error) {
-	// No clue. A guess.
-	if param.DataType.Value == 65535 && param.SearchTarget.Value == 10 {
-		var dataID uint64
+var selectByDataIdStmt *sql.Stmt
+var selectByNameAndOwnerStmt *sql.Stmt
 
-		err := Postgres.QueryRow(`SELECT data_id from datastore.objects WHERE name = 'gamedata' AND owner = $1`, pid.Value()).Scan(&dataID)
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, 0, nil
-		} else if err != nil {
-			// COOL FACTS: this crashes Puyo
-			return nil, 0, nex.NewError(nex.ResultCodes.DataStore.SystemFileError, err.Error())
+// === GETTERS ===
+
+// TODO totalCount
+func getObjects(stmt *sql.Stmt, args ...any) ([]*types.DataStoreMetaInfo, error) {
+	rows, err := stmt.Query(args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []*types.DataStoreMetaInfo
+
+	for rows.Next() {
+		result := types.NewDataStoreMetaInfo()
+
+		var createdTime time.Time
+		var updatedTime time.Time
+		var ownerID uint64
+		var permissionRecipients []uint64
+		var delPermissionRecipients []uint64
+		var tags []string
+
+		result.ExpireTime = nextypes.NewDateTime(0x9C3f3E0000) // * 9999-12-31T00:00:00.000Z. This is what the real server sends
+
+		err := rows.Scan(
+			&result.DataID.Value,
+			&ownerID,
+			&result.Size.Value,
+			&result.Name.Value,
+			&result.DataType.Value,
+			&result.MetaBinary.Value,
+			&result.Permission.Permission.Value,
+			pq.Array(&permissionRecipients),
+			&result.DelPermission.Permission.Value,
+			pq.Array(&delPermissionRecipients),
+			&result.Flag.Value,
+			&result.Period.Value,
+			&result.ReferDataID.Value,
+			pq.Array(&tags),
+			&createdTime,
+			&updatedTime,
+		)
+		if err != nil {
+			return nil, err
+			//globals.Logger.Error(err.Error())
+			//continue
 		}
 
-		info, errCode := GetObjectInfoByDataID(nextypes.NewPrimitiveU64(dataID))
-		if errCode != nil {
-			return nil, 0, nil
-		}
+		result.OwnerID = nextypes.NewPID(ownerID)
+		result.Permission.RecipientIDs = createPIDList(&permissionRecipients)
+		result.DelPermission.RecipientIDs = createPIDList(&delPermissionRecipients)
+		result.Tags = createStringList(&tags)
+		result.CreatedTime.FromTimestamp(createdTime)
+		result.UpdatedTime.FromTimestamp(updatedTime)
+		result.ReferredTime.FromTimestamp(createdTime)
 
-		result := make([]*types.DataStoreMetaInfo, 1)
-		result[0] = info
-
-		return result, 1, nil
+		results = append(results, result)
 	}
 
-	globals.Logger.Warning("Stubbed GetObjectInfosByDataStoreSearchParam!")
-	return nil, 0, nil
+	return results, rows.Err()
+}
+
+// part of ChangeMeta
+func GetObjectInfoByDataID(dataID *nextypes.PrimitiveU64) (*types.DataStoreMetaInfo, *nex.Error) {
+	objects, err := getObjects(selectByDataIdStmt, 1, dataID.Value)
+	if errors.Is(err, sql.ErrNoRows) || len(objects) < 1 {
+		return nil, nex.NewError(nex.ResultCodes.DataStore.NotFound, "Object not found")
+	} else if err != nil {
+		return nil, nex.NewError(nex.ResultCodes.DataStore.SystemFileError, err.Error())
+	}
+
+	return objects[0], nil
+}
+
+// part of GetMeta
+func GetObjectInfoByDataIDWithPassword(dataID *nextypes.PrimitiveU64, _ *nextypes.PrimitiveU64) (*types.DataStoreMetaInfo, *nex.Error) {
+	// TODO check password?
+	return GetObjectInfoByDataID(dataID)
 }
 
 // part of GetMeta, not used
@@ -48,77 +102,24 @@ func GetObjectInfoByPersistenceTargetWithPassword(persistenceTarget *types.DataS
 	return nil, nil
 }
 
-// part of GetMeta
-func GetObjectInfoByDataIDWithPassword(dataID *nextypes.PrimitiveU64, _ *nextypes.PrimitiveU64) (*types.DataStoreMetaInfo, *nex.Error) {
-	// TODO check password
-	return GetObjectInfoByDataID(dataID)
-}
+// get own gamedata (among other things)
+func GetObjectInfosByDataStoreSearchParam(param *types.DataStoreSearchParam, pid *nextypes.PID) ([]*types.DataStoreMetaInfo, uint32, *nex.Error) {
+	// TODO refactor this according to Jon's notes
+	if param.DataType.Value == 65535 && param.SearchTarget.Value == 10 {
+		// TODO "gamedata" hardcoded
+		objects, err := getObjects(selectByNameAndOwnerStmt, 1, "gamedata", pid.Value())
+		if err != nil {
+			return nil, 0, nex.NewError(nex.ResultCodes.DataStore.SystemFileError, err.Error())
+		}
 
-// part of ChangeMeta
-func GetObjectInfoByDataID(dataID *nextypes.PrimitiveU64) (*types.DataStoreMetaInfo, *nex.Error) {
-	result := types.NewDataStoreMetaInfo()
-
-	var createdTime time.Time
-	var updatedTime time.Time
-	var ownerID uint64
-	var permissionRecipients []uint64
-	var delPermissionRecipients []uint64
-	var tags []string
-
-	result.ExpireTime = nextypes.NewDateTime(0x9C3f3E0000) // * 9999-12-31T00:00:00.000Z. This is what the real server sends
-
-	err := Postgres.QueryRow(`SELECT
-    	data_id,
-    	owner,
-    	size,
-    	name,
-    	data_type,
-		meta_binary,
-        permission,
-     	permission_recipients,
-     	delete_permission,
-     	delete_permission_recipients,
-     	flag,
-        period,
-     	refer_data_id,
-     	tags,
-     	creation_date,
-     	update_date
-	FROM datastore.objects WHERE data_id = $1`, dataID.Value).Scan(
-		&result.DataID.Value,
-		&ownerID,
-		&result.Size.Value,
-		&result.Name.Value,
-		&result.DataType.Value,
-		&result.MetaBinary.Value,
-		&result.Permission.Permission.Value,
-		pq.Array(&permissionRecipients),
-		&result.DelPermission.Permission.Value,
-		pq.Array(&delPermissionRecipients),
-		&result.Flag.Value,
-		&result.Period.Value,
-		&result.ReferDataID.Value,
-		pq.Array(&tags),
-		&createdTime,
-		&updatedTime,
-	)
-
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nex.NewError(nex.ResultCodes.DataStore.NotFound, "Object not found")
-	} else if err != nil {
-		return nil, nex.NewError(nex.ResultCodes.DataStore.SystemFileError, err.Error())
+		return objects, uint32(len(objects)), nil
 	}
 
-	result.OwnerID = nextypes.NewPID(ownerID)
-	result.Permission.RecipientIDs = createPIDList(&permissionRecipients)
-	result.DelPermission.RecipientIDs = createPIDList(&delPermissionRecipients)
-	result.Tags = createStringList(&tags)
-	result.CreatedTime.FromTimestamp(createdTime)
-	result.UpdatedTime.FromTimestamp(updatedTime)
-	result.ReferredTime.FromTimestamp(createdTime)
-
-	return result, nil
+	globals.Logger.Warning("Unknown GetObjectInfosByDataStoreSearchParam!")
+	return nil, 0, nil
 }
+
+// === INSERTERS === (long-handed)
 
 // uploading gamedata meta object
 func InitializeObjectByPreparePostParam(ownerPID *nextypes.PID, param *types.DataStorePreparePostParam) (uint64, *nex.Error) {
@@ -181,6 +182,8 @@ func InitializeObjectRatingWithSlot(_ uint64, _ *types.DataStoreRatingInitParamW
 	return nil
 }
 
+// === UPDATERS ===
+
 // Parts of ChangeMeta
 func UpdateObjectPeriodByDataIDWithPassword(dataID *nextypes.PrimitiveU64, dataType *nextypes.PrimitiveU16, password *nextypes.PrimitiveU64) *nex.Error {
 	return nil
@@ -194,6 +197,43 @@ func UpdateObjectMetaBinaryByDataIDWithPassword(dataID *nextypes.PrimitiveU64, m
 // Parts of ChangeMeta
 func UpdateObjectDataTypeByDataIDWithPassword(dataID *nextypes.PrimitiveU64, period *nextypes.PrimitiveU16, password *nextypes.PrimitiveU64) *nex.Error {
 	return nil
+}
+
+// === HELPERS ===
+
+// Prepared statements
+func initDatastore() {
+	const selectObject = `
+	SELECT
+    	data_id,
+    	owner,
+    	size,
+    	name,
+    	data_type,
+		meta_binary,
+        permission,
+     	permission_recipients,
+     	delete_permission,
+     	delete_permission_recipients,
+     	flag,
+        period,
+     	refer_data_id,
+     	tags,
+     	creation_date,
+     	update_date
+	FROM datastore.objects`
+
+	stmt, err := Postgres.Prepare(selectObject + `LIMIT $1 WHERE name = $2 AND owner = $3`)
+	if err != nil {
+		panic(err)
+	}
+	selectByNameAndOwnerStmt = stmt
+
+	stmt, err = Postgres.Prepare(selectObject + `LIMIT $1 WHERE data_id = $2`)
+	if err != nil {
+		panic(err)
+	}
+	selectByDataIdStmt = stmt
 }
 
 // Helpers for nex types
