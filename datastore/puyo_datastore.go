@@ -8,12 +8,13 @@ import (
 	"github.com/PretendoNetwork/nex-protocols-go/v2/datastore/types"
 	"github.com/PretendoNetwork/puyo-puyo-tetris/globals"
 	"github.com/lib/pq"
-	"runtime"
 	"time"
 )
 
 var selectByDataIdStmt *sql.Stmt
 var selectByNameAndOwnerStmt *sql.Stmt
+var insertObjectStmt *sql.Stmt
+var updateMetaBinaryStmt *sql.Stmt
 
 // === GETTERS ===
 
@@ -96,10 +97,8 @@ func GetObjectInfoByDataIDWithPassword(dataID *nextypes.PrimitiveU64, _ *nextype
 }
 
 // part of GetMeta, not used
-func GetObjectInfoByPersistenceTargetWithPassword(persistenceTarget *types.DataStorePersistenceTarget, password *nextypes.PrimitiveU64) (*types.DataStoreMetaInfo, *nex.Error) {
-	globals.Logger.Warning("Actually, GetObjectInfoByPersistenceTargetWithPassword *is* used!")
-	runtime.Breakpoint() // TODO disable in prod
-	return nil, nil
+func GetObjectInfoByPersistenceTargetWithPassword(_ *types.DataStorePersistenceTarget, _ *nextypes.PrimitiveU64) (*types.DataStoreMetaInfo, *nex.Error) {
+	return nil, nex.NewError(nex.ResultCodes.Core.NotImplemented, "GetObjectInfoByPersistenceTargetWithPassword unimplemented")
 }
 
 // get own gamedata (among other things)
@@ -127,29 +126,7 @@ func InitializeObjectByPreparePostParam(ownerPID *nextypes.PID, param *types.Dat
 
 	var dataID uint64
 
-	err := Postgres.QueryRow(`INSERT INTO datastore.objects 
-    (
-    	owner,
-     	size,
-     	name,
-     	data_type,
-     	meta_binary,
-        permission,
-     	permission_recipients,
-     	delete_permission,
-     	delete_permission_recipients,
-     	flag,
-        period,
-     	refer_data_id,
-     	tags, 
-     	persistence_slot_id,
-     	extra_data,
-     	creation_date,
-     	update_date
-    )
-	VALUES (
-	        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
-	) RETURNING data_id`,
+	err := insertObjectStmt.QueryRow(
 		ownerPID.Value(),
 		param.Size.Value,
 		param.Name.Value,
@@ -177,26 +154,36 @@ func InitializeObjectByPreparePostParam(ownerPID *nextypes.PID, param *types.Dat
 
 // maybe unused?
 func InitializeObjectRatingWithSlot(_ uint64, _ *types.DataStoreRatingInitParamWithSlot) *nex.Error {
-	globals.Logger.Warning("Actually, InitializeObjectRatingWithSlot *is* used!")
-	runtime.Breakpoint() // TODO disable in prod
-	return nil
+	return nex.NewError(nex.ResultCodes.Core.NotImplemented, "InitializeObjectRatingWithSlot unimplemented")
 }
 
 // === UPDATERS ===
 
 // Parts of ChangeMeta
-func UpdateObjectPeriodByDataIDWithPassword(dataID *nextypes.PrimitiveU64, dataType *nextypes.PrimitiveU16, password *nextypes.PrimitiveU64) *nex.Error {
+func UpdateObjectPeriodByDataIDWithPassword(_ *nextypes.PrimitiveU64, _ *nextypes.PrimitiveU16, _ *nextypes.PrimitiveU64) *nex.Error {
+	return nex.NewError(nex.ResultCodes.Core.NotImplemented, "UpdateObjectPeriodByDataIDWithPassword unimplemented")
+}
+
+// Parts of ChangeMeta
+func UpdateObjectMetaBinaryByDataIDWithPassword(dataID *nextypes.PrimitiveU64, metaBinary *nextypes.QBuffer, _ *nextypes.PrimitiveU64) *nex.Error {
+	result, err := updateMetaBinaryStmt.Exec(metaBinary.Value, dataID.Value)
+	if err != nil {
+		return nex.NewError(nex.ResultCodes.DataStore.SystemFileError, err.Error())
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return nex.NewError(nex.ResultCodes.DataStore.SystemFileError, err.Error())
+	} else if rows < 1 {
+		return nex.NewError(nex.ResultCodes.DataStore.NotFound, "Object not found")
+	}
+
 	return nil
 }
 
 // Parts of ChangeMeta
-func UpdateObjectMetaBinaryByDataIDWithPassword(dataID *nextypes.PrimitiveU64, metaBinary *nextypes.QBuffer, password *nextypes.PrimitiveU64) *nex.Error {
-	return nil
-}
-
-// Parts of ChangeMeta
-func UpdateObjectDataTypeByDataIDWithPassword(dataID *nextypes.PrimitiveU64, period *nextypes.PrimitiveU16, password *nextypes.PrimitiveU64) *nex.Error {
-	return nil
+func UpdateObjectDataTypeByDataIDWithPassword(_ *nextypes.PrimitiveU64, _ *nextypes.PrimitiveU16, _ *nextypes.PrimitiveU64) *nex.Error {
+	return nex.NewError(nex.ResultCodes.Core.NotImplemented, "UpdateObjectDataTypeByDataIDWithPassword unimplemented")
 }
 
 // === HELPERS ===
@@ -223,17 +210,51 @@ func initDatastore() {
      	update_date
 	FROM datastore.objects`
 
-	stmt, err := Postgres.Prepare(selectObject + `LIMIT $1 WHERE name = $2 AND owner = $3`)
+	stmt, err := Postgres.Prepare(selectObject + ` WHERE name = $2 AND owner = $3 LIMIT $1`)
 	if err != nil {
 		panic(err)
 	}
 	selectByNameAndOwnerStmt = stmt
 
-	stmt, err = Postgres.Prepare(selectObject + `LIMIT $1 WHERE data_id = $2`)
+	stmt, err = Postgres.Prepare(selectObject + ` WHERE data_id = $2 LIMIT $1`)
 	if err != nil {
 		panic(err)
 	}
 	selectByDataIdStmt = stmt
+
+	stmt, err = Postgres.Prepare(`INSERT INTO datastore.objects 
+    (
+    	owner,
+     	size,
+     	name,
+     	data_type,
+     	meta_binary,
+        permission,
+     	permission_recipients,
+     	delete_permission,
+     	delete_permission_recipients,
+     	flag,
+        period,
+     	refer_data_id,
+     	tags, 
+     	persistence_slot_id,
+     	extra_data,
+     	creation_date,
+     	update_date
+    )
+	VALUES (
+	        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
+	) RETURNING data_id`)
+	if err != nil {
+		panic(err)
+	}
+	insertObjectStmt = stmt
+
+	stmt, err = Postgres.Prepare(`UPDATE datastore.objects SET meta_binary = $1 WHERE data_id = $2`)
+	if err != nil {
+		panic(err)
+	}
+	updateMetaBinaryStmt = stmt
 }
 
 // Helpers for nex types
