@@ -11,7 +11,6 @@ import (
 	secure "github.com/PretendoNetwork/nex-protocols-go/v2/secure-connection"
 	puyodatastore "github.com/PretendoNetwork/puyo-puyo-tetris/datastore"
 	"github.com/PretendoNetwork/puyo-puyo-tetris/globals"
-	puyoranking "github.com/PretendoNetwork/puyo-puyo-tetris/ranking"
 	"os"
 
 	commonmatchmaking "github.com/PretendoNetwork/nex-protocols-common-go/v2/match-making"
@@ -96,7 +95,14 @@ func registerCommonSecureServerProtocols() {
 	rankingProtocol := ranking.NewProtocol()
 	globals.SecureEndpoint.RegisterServiceProtocol(rankingProtocol)
 	commonRankingProtocol := commonranking.NewCommonProtocol(rankingProtocol)
-	commonRankingProtocol.GetRankingsAndCountByCategoryAndRankingOrderParam = puyoranking.GetRankingsAndCountByCategoryAndRankingOrderParam
+	commonRankingProtocol.GetRankingsAndCountByCategoryAndRankingOrderParam = puyodatastore.GetRankingsAndCountByCategoryAndRankingOrderParam
+	commonRankingProtocol.GetOwnRankingByCategoryAndRankingOrderParam = puyodatastore.GetOwnRankingByCategoryAndRankingOrderParam
+	commonRankingProtocol.GetNearbyFriendsRankingsAndCountByCategoryAndRankingOrderParam = puyodatastore.GetNearbyFriendsRankingsAndCountByCategoryAndRankingOrderParam
+	commonRankingProtocol.GetFriendsRankingsAndCountByCategoryAndRankingOrderParam = puyodatastore.GetFriendsRankingsAndCountByCategoryAndRankingOrderParam
+	commonRankingProtocol.GetNearbyRankingsAndCountByCategoryAndRankingOrderParam = puyodatastore.GetNearbyRankingsAndCountByCategoryAndRankingOrderParam
+	commonRankingProtocol.InsertRankingByPIDAndRankingScoreData = puyodatastore.InsertRankingByPIDAndRankingScoreData
+	commonRankingProtocol.UploadCommonData = puyodatastore.UploadCommonData
+	commonRankingProtocol.GetCommonData = puyodatastore.GetCommonData
 
 	// Matchmaking stuff - National Puzzle League
 	natTraversalProtocol := nattraversal.NewProtocol()
