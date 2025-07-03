@@ -1,7 +1,7 @@
 package globals
 
 import (
-	pb "github.com/PretendoNetwork/grpc-go/account"
+	pb "github.com/PretendoNetwork/grpc/go/account"
 	"github.com/PretendoNetwork/nex-go/v2"
 	"github.com/PretendoNetwork/nex-protocols-common-go/v2/datastore"
 	"github.com/PretendoNetwork/plogger-go"
@@ -25,3 +25,5 @@ var GRPCAccountCommonMetadata metadata.MD
 
 var MinIOClient *minio.Client
 var Presigner *datastore.S3Presigner
+
+var TokenAESKey []byte

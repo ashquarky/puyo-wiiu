@@ -20,9 +20,6 @@ func ConnectPostgres() {
 
 	globals.Logger.Success("Connected to Postgres!")
 
-	initDatastoreTable()
-	initDatastore()
-
 	initRankingTable()
 	initRanking()
 }

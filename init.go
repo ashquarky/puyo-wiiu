@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"fmt"
 	"github.com/PretendoNetwork/nex-protocols-common-go/v2/datastore"
 	puyodatastore "github.com/PretendoNetwork/puyo-puyo-tetris/datastore"
@@ -8,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	pb "github.com/PretendoNetwork/grpc-go/account"
+	pb "github.com/PretendoNetwork/grpc/go/account"
 	"github.com/PretendoNetwork/plogger-go"
 	"github.com/PretendoNetwork/puyo-puyo-tetris/globals"
 	"github.com/joho/godotenv"
@@ -40,6 +41,7 @@ func init() {
 	accountGRPCHost := os.Getenv("PN_PUYOPUYOTETRIS_ACCOUNT_GRPC_HOST")
 	accountGRPCPort := os.Getenv("PN_PUYOPUYOTETRIS_ACCOUNT_GRPC_PORT")
 	accountGRPCAPIKey := os.Getenv("PN_PUYOPUYOTETRIS_ACCOUNT_GRPC_API_KEY")
+	tokenAesKey := os.Getenv("PN_PUYOPUYOTETRIS_AES_KEY")
 
 	if strings.TrimSpace(kerberosPassword) == "" {
 		globals.Logger.Warningf("PN_PUYOPUYOTETRIS_KERBEROS_PASSWORD environment variable not set. Using default password: %q", globals.KerberosPassword)
@@ -112,6 +114,17 @@ func init() {
 	globals.GRPCAccountCommonMetadata = metadata.Pairs(
 		"X-API-Key", accountGRPCAPIKey,
 	)
+
+	if strings.TrimSpace(tokenAesKey) == "" {
+		globals.Logger.Error("PN_PUYOPUYOTETRIS_AES_KEY not set!")
+		os.Exit(0)
+	}
+
+	globals.TokenAESKey, err = hex.DecodeString(tokenAesKey)
+	if err != nil {
+		globals.Logger.Errorf("Failed to decode AES key: %v", err)
+		os.Exit(0)
+	}
 
 	staticCredentials := credentials.NewStaticV4(s3AccessKey, s3AccessSecret, "")
 

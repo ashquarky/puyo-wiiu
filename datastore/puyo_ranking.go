@@ -29,8 +29,8 @@ import (
 						common_data,
 						update_date
 */
-func parseRankingDataList(rows *sql.Rows) (*nextypes.List[*types.RankingRankData], error) {
-	results := nextypes.NewList[*types.RankingRankData]()
+func parseRankingDataList(rows *sql.Rows) (nextypes.List[types.RankingRankData], error) {
+	results := nextypes.NewList[types.RankingRankData]()
 
 	for rows.Next() {
 		result := types.NewRankingRankData()
@@ -39,12 +39,12 @@ func parseRankingDataList(rows *sql.Rows) (*nextypes.List[*types.RankingRankData
 
 		err := rows.Scan(
 			&userPid,
-			&result.UniqueID.Value,
-			&result.Score.Value,
-			&result.Groups.Value,
-			&result.Param.Value,
-			&result.CommonData.Value,
-			&result.Order.Value,
+			&result.UniqueID,
+			&result.Score,
+			&result.Groups,
+			&result.Param,
+			&result.CommonData,
+			&result.Order,
 			&updateDate,
 		)
 		if err != nil {
@@ -54,7 +54,7 @@ func parseRankingDataList(rows *sql.Rows) (*nextypes.List[*types.RankingRankData
 		result.PrincipalID = nextypes.NewPID(userPid)
 		result.UpdateTime.FromTimestamp(updateDate)
 
-		results.Append(result)
+		results = append(results, result)
 	}
 
 	return results, nil
@@ -66,10 +66,10 @@ func isUndefinedTable(err error) bool {
 	return err != nil && errors.As(err, &pqErr) && pqErr.SQLState() == "42P01"
 }
 
-func GetRankingsAndCountByCategoryAndRankingOrderParam(category *nextypes.PrimitiveU32, rankingOrderParam *types.RankingOrderParam) (*nextypes.List[*types.RankingRankData], uint32, error) {
+func GetRankingsAndCountByCategoryAndRankingOrderParam(category nextypes.UInt32, rankingOrderParam types.RankingOrderParam) (nextypes.List[types.RankingRankData], uint32, error) {
 	globals.Logger.Info(rankingOrderParam.FormatToString(1))
 	// todo ordinal ranking
-	rankingTable := `ranking.ranks_` + strconv.Itoa(int(category.Value))
+	rankingTable := `ranking.ranks_` + strconv.Itoa(int(category))
 	rows, err := Postgres.Query(`
 		SELECT
 		    rt.user_pid,
@@ -84,8 +84,8 @@ func GetRankingsAndCountByCategoryAndRankingOrderParam(category *nextypes.Primit
 		LIMIT $1
 		OFFSET $2
 	`,
-		rankingOrderParam.Length.Value,
-		rankingOrderParam.Offset.Value,
+		rankingOrderParam.Length,
+		rankingOrderParam.Offset,
 	)
 	// undefined table is expected if rankingTable isn't existing
 	if errors.Is(err, sql.ErrNoRows) || isUndefinedTable(err) {
@@ -100,15 +100,15 @@ func GetRankingsAndCountByCategoryAndRankingOrderParam(category *nextypes.Primit
 	}
 
 	// todo totalCount
-	return results, uint32(results.Length()), nil
+	return results, uint32(len(results)), nil
 }
-func GetNearbyRankingsAndCountByCategoryAndRankingOrderParam(pid *nextypes.PID, category *nextypes.PrimitiveU32, rankingOrderParam *types.RankingOrderParam) (*nextypes.List[*types.RankingRankData], uint32, error) {
-	globals.Logger.Infof("pid: %d cat: %d", pid.Value(), category.Value)
+func GetNearbyRankingsAndCountByCategoryAndRankingOrderParam(pid nextypes.PID, category nextypes.UInt32, rankingOrderParam types.RankingOrderParam) (nextypes.List[types.RankingRankData], uint32, error) {
+	globals.Logger.Infof("pid: %d cat: %d", pid, category)
 	globals.Logger.Info(rankingOrderParam.FormatToString(1))
 
 	// todo ordinal ranking
 	// https://stackoverflow.com/a/9852512
-	rankingTable := `ranking.ranks_` + strconv.Itoa(int(category.Value))
+	rankingTable := `ranking.ranks_` + strconv.Itoa(int(category))
 	rows, err := Postgres.Query(`
 		WITH central_user as (
 		        SELECT
@@ -131,8 +131,8 @@ func GetNearbyRankingsAndCountByCategoryAndRankingOrderParam(pid *nextypes.PID, 
 		WHERE rt.ordinal >= central_user.min_ord
 		AND rt.ordinal < central_user.max_ord
 	`,
-		pid.Value(),
-		rankingOrderParam.Length.Value,
+		pid,
+		rankingOrderParam.Length,
 	)
 	// undefined table is expected if rankingTable isn't existing
 	if errors.Is(err, sql.ErrNoRows) || isUndefinedTable(err) {
@@ -147,19 +147,19 @@ func GetNearbyRankingsAndCountByCategoryAndRankingOrderParam(pid *nextypes.PID, 
 	}
 
 	// todo totalCount
-	return results, uint32(results.Length()), nil
+	return results, uint32(len(results)), nil
 }
-func GetFriendsRankingsAndCountByCategoryAndRankingOrderParam(pid *nextypes.PID, category *nextypes.PrimitiveU32, rankingOrderParam *types.RankingOrderParam) (*nextypes.List[*types.RankingRankData], uint32, error) {
+func GetFriendsRankingsAndCountByCategoryAndRankingOrderParam(_pid nextypes.PID, _category nextypes.UInt32, rankingOrderParam types.RankingOrderParam) (nextypes.List[types.RankingRankData], uint32, error) {
 	globals.Logger.Info(rankingOrderParam.FormatToString(1))
 	return nil, 0, nil
 }
-func GetNearbyFriendsRankingsAndCountByCategoryAndRankingOrderParam(pid *nextypes.PID, category *nextypes.PrimitiveU32, rankingOrderParam *types.RankingOrderParam) (*nextypes.List[*types.RankingRankData], uint32, error) {
+func GetNearbyFriendsRankingsAndCountByCategoryAndRankingOrderParam(_pid nextypes.PID, _category nextypes.UInt32, rankingOrderParam types.RankingOrderParam) (nextypes.List[types.RankingRankData], uint32, error) {
 	globals.Logger.Info(rankingOrderParam.FormatToString(1))
 	return nil, 0, nil
 }
-func GetOwnRankingByCategoryAndRankingOrderParam(pid *nextypes.PID, category *nextypes.PrimitiveU32, rankingOrderParam *types.RankingOrderParam) (*nextypes.List[*types.RankingRankData], uint32, error) {
+func GetOwnRankingByCategoryAndRankingOrderParam(pid nextypes.PID, category nextypes.UInt32, rankingOrderParam types.RankingOrderParam) (nextypes.List[types.RankingRankData], uint32, error) {
 	// todo filter by groups
-	rankingTable := `ranking.ranks_` + strconv.Itoa(int(category.Value))
+	rankingTable := `ranking.ranks_` + strconv.Itoa(int(category))
 	rows, err := Postgres.Query(`
 		SELECT
 		    user_pid,
@@ -174,8 +174,8 @@ func GetOwnRankingByCategoryAndRankingOrderParam(pid *nextypes.PID, category *ne
 		WHERE user_pid = $1
 		LIMIT $2
 	`,
-		pid.Value(),
-		rankingOrderParam.Length.Value,
+		pid,
+		rankingOrderParam.Length,
 	)
 	// undefined table is expected if rankingTable isn't existing
 	if errors.Is(err, sql.ErrNoRows) || isUndefinedTable(err) {
@@ -187,11 +187,11 @@ func GetOwnRankingByCategoryAndRankingOrderParam(pid *nextypes.PID, category *ne
 	results, err := parseRankingDataList(rows)
 	if err != nil {
 		return nil, 0, err
-	} else if results.Length() != 1 {
+	} else if len(results) != 1 {
 		return nil, 0, nil
 	}
 
-	return results, uint32(results.Length()), nil
+	return results, uint32(len(results)), nil
 }
 
 func createCategory(category uint32, golfScoring bool) error {
@@ -233,19 +233,19 @@ func createCategory(category uint32, golfScoring bool) error {
 	return nil
 }
 
-func InsertRankingByPIDAndRankingScoreData(pid *nextypes.PID, rankingScoreData *types.RankingScoreData, uniqueID *nextypes.PrimitiveU64) error {
+func InsertRankingByPIDAndRankingScoreData(pid nextypes.PID, rankingScoreData types.RankingScoreData, _uniqueID nextypes.UInt64) error {
 	globals.Logger.Info(rankingScoreData.FormatToString(1))
 	now := time.Now()
 	res, err := Postgres.Exec(`
 		UPDATE ranking.scores SET score = $1, groups = $2, param = $3, update_date = $4
 		WHERE category = $5 AND user_pid = $6
 	`,
-		rankingScoreData.Score.Value,
-		rankingScoreData.Groups.Value,
-		rankingScoreData.Param.Value,
+		rankingScoreData.Score,
+		rankingScoreData.Groups,
+		rankingScoreData.Param,
 		now,
-		rankingScoreData.Category.Value,
-		pid.Value(),
+		rankingScoreData.Category,
+		pid,
 	)
 	if err != nil {
 		return err
@@ -262,15 +262,15 @@ func InsertRankingByPIDAndRankingScoreData(pid *nextypes.PID, rankingScoreData *
 	}
 
 	var categoryExists bool
-	err = Postgres.QueryRow(`SELECT EXISTS(SELECT 1 FROM ranking.categories WHERE category = $1)`, rankingScoreData.Category.Value).Scan(&categoryExists)
+	err = Postgres.QueryRow(`SELECT EXISTS(SELECT 1 FROM ranking.categories WHERE category = $1)`, rankingScoreData.Category).Scan(&categoryExists)
 	if err != nil {
 		return err
 	}
 
 	if !categoryExists {
 		err = createCategory(
-			rankingScoreData.Category.Value,
-			rankingScoreData.OrderBy.Value == 1,
+			uint32(rankingScoreData.Category),
+			rankingScoreData.OrderBy == 1,
 		)
 		if err != nil {
 			return err
@@ -281,28 +281,28 @@ func InsertRankingByPIDAndRankingScoreData(pid *nextypes.PID, rankingScoreData *
 			INSERT INTO ranking.scores (user_pid, category, groups, score, param, creation_date, update_date) 
 			VALUES ($1, $2, $3, $4, $5, $6, $6)
 	`,
-		pid.Value(),
-		rankingScoreData.Category.Value,
-		rankingScoreData.Groups.Value,
-		rankingScoreData.Score.Value,
-		rankingScoreData.Param.Value,
+		pid,
+		rankingScoreData.Category,
+		rankingScoreData.Groups,
+		rankingScoreData.Score,
+		rankingScoreData.Param,
 		now,
 	)
 
 	return err
 }
 
-func GetCommonData(uniqueID *nextypes.PrimitiveU64) (*nextypes.Buffer, error) {
-	globals.Logger.Infof("GetCommonData %d", uniqueID.Value)
+func GetCommonData(uniqueID nextypes.UInt64) (nextypes.Buffer, error) {
+	globals.Logger.Infof("GetCommonData %d", uniqueID)
 	return nil, nil
 }
 
-func UploadCommonData(pid *nextypes.PID, uniqueID *nextypes.PrimitiveU64, commonData *nextypes.Buffer) error {
+func UploadCommonData(pid nextypes.PID, _uniqueID nextypes.UInt64, commonData nextypes.Buffer) error {
 	_, err := Postgres.Exec(`
 		UPDATE ranking.scores SET common_data = $1 WHERE user_pid = $2
 	`,
-		commonData.Value,
-		pid.Value(),
+		commonData,
+		pid,
 	)
 	return err
 }
