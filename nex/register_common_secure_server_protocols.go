@@ -65,6 +65,7 @@ func registerCommonSecureServerProtocols() {
 	secureProtocol := secure.NewProtocol()
 	globals.SecureEndpoint.RegisterServiceProtocol(secureProtocol)
 	commonSecureProtocol := commonsecure.NewCommonProtocol(secureProtocol)
+	commonSecureProtocol.EnableInsecureRegister() // Game uses TicketGranting::LoginEx
 
 	commonSecureProtocol.CreateReportDBRecord = CreateReportDBRecord
 
@@ -88,17 +89,20 @@ func registerCommonSecureServerProtocols() {
 
 	matchMakingProtocol := matchmaking.NewProtocol()
 	globals.SecureEndpoint.RegisterServiceProtocol(matchMakingProtocol)
-	commonmatchmaking.NewCommonProtocol(matchMakingProtocol)
+	commonMatchMakingProtocol := commonmatchmaking.NewCommonProtocol(matchMakingProtocol)
+	commonMatchMakingProtocol.SetManager(globals.MatchmakingManager)
 
 	matchMakingExtProtocol := matchmakingext.NewProtocol()
 	globals.SecureEndpoint.RegisterServiceProtocol(matchMakingExtProtocol)
-	commonmatchmakingext.NewCommonProtocol(matchMakingExtProtocol)
+	commonMatchMakingExtProtocol := commonmatchmakingext.NewCommonProtocol(matchMakingExtProtocol)
+	commonMatchMakingExtProtocol.SetManager(globals.MatchmakingManager)
 
 	matchmakeExtensionProtocol := matchmakeextension.NewProtocol()
 	globals.SecureEndpoint.RegisterServiceProtocol(matchmakeExtensionProtocol)
 	commonMatchmakeExtensionProtocol := commonmatchmakeextension.NewCommonProtocol(matchmakeExtensionProtocol)
 	// * Handle custom CloseParticipation behaviour
 	//matchmakeExtensionProtocol.SetHandlerCloseParticipation(MatchmakeExtensionCloseParticipation)
+	commonMatchmakeExtensionProtocol.SetManager(globals.MatchmakingManager)
 
 	commonMatchmakeExtensionProtocol.OnAfterAutoMatchmakeWithSearchCriteriaPostpone = func(packet nex.PacketInterface, lstSearchCriteria types.List[matchmakingtypes.MatchmakeSessionSearchCriteria], anyGathering matchmakingtypes.GatheringHolder, strMessage types.String) {
 		globals.Logger.Info("Matchmake search criteria:")

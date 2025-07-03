@@ -31,3 +31,4 @@ log
 *.key
 *.pcap
 *.pcapng
+settings.json

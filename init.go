@@ -42,6 +42,7 @@ func init() {
 	accountGRPCPort := os.Getenv("PN_PUYOPUYOTETRIS_ACCOUNT_GRPC_PORT")
 	accountGRPCAPIKey := os.Getenv("PN_PUYOPUYOTETRIS_ACCOUNT_GRPC_API_KEY")
 	tokenAesKey := os.Getenv("PN_PUYOPUYOTETRIS_AES_KEY")
+	localAuthMode := os.Getenv("PN_PUYOPUYOTETRIS_LOCAL_AUTH")
 
 	if strings.TrimSpace(kerberosPassword) == "" {
 		globals.Logger.Warningf("PN_PUYOPUYOTETRIS_KERBEROS_PASSWORD environment variable not set. Using default password: %q", globals.KerberosPassword)
@@ -124,6 +125,12 @@ func init() {
 	if err != nil {
 		globals.Logger.Errorf("Failed to decode AES key: %v", err)
 		os.Exit(0)
+	}
+
+	globals.LocalAuthMode = localAuthMode == "1"
+	if globals.LocalAuthMode {
+		globals.Logger.Warning("Local authentication mode is enabled. Token validation will be skipped!")
+		globals.Logger.Warning("This is insecure and could allow ban bypasses!")
 	}
 
 	staticCredentials := credentials.NewStaticV4(s3AccessKey, s3AccessSecret, "")

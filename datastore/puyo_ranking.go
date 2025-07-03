@@ -70,7 +70,7 @@ func GetRankingsAndCountByCategoryAndRankingOrderParam(category nextypes.UInt32,
 	globals.Logger.Info(rankingOrderParam.FormatToString(1))
 	// todo ordinal ranking
 	rankingTable := `ranking.ranks_` + strconv.Itoa(int(category))
-	rows, err := Postgres.Query(`
+	rows, err := globals.Postgres.Query(`
 		SELECT
 		    rt.user_pid,
 		    rt.unique_id,
@@ -109,7 +109,7 @@ func GetNearbyRankingsAndCountByCategoryAndRankingOrderParam(pid nextypes.PID, c
 	// todo ordinal ranking
 	// https://stackoverflow.com/a/9852512
 	rankingTable := `ranking.ranks_` + strconv.Itoa(int(category))
-	rows, err := Postgres.Query(`
+	rows, err := globals.Postgres.Query(`
 		WITH central_user as (
 		        SELECT
 		            ordinal,
@@ -160,7 +160,7 @@ func GetNearbyFriendsRankingsAndCountByCategoryAndRankingOrderParam(_pid nextype
 func GetOwnRankingByCategoryAndRankingOrderParam(pid nextypes.PID, category nextypes.UInt32, rankingOrderParam types.RankingOrderParam) (nextypes.List[types.RankingRankData], uint32, error) {
 	// todo filter by groups
 	rankingTable := `ranking.ranks_` + strconv.Itoa(int(category))
-	rows, err := Postgres.Query(`
+	rows, err := globals.Postgres.Query(`
 		SELECT
 		    user_pid,
 		    unique_id,
@@ -196,7 +196,7 @@ func GetOwnRankingByCategoryAndRankingOrderParam(pid nextypes.PID, category next
 
 func createCategory(category uint32, golfScoring bool) error {
 	now := time.Now()
-	_, err := Postgres.Exec(`INSERT INTO ranking.categories (category, golf_scoring, creation_date)
+	_, err := globals.Postgres.Exec(`INSERT INTO ranking.categories (category, golf_scoring, creation_date)
 		VALUES ($1, $2, $3) 
 	`,
 		category, golfScoring, now,
@@ -211,7 +211,7 @@ func createCategory(category uint32, golfScoring bool) error {
 	if golfScoring {
 		order = "ASC"
 	}
-	_, err = Postgres.Exec(fmt.Sprintf(`CREATE VIEW ranking.ranks_%d AS
+	_, err = globals.Postgres.Exec(fmt.Sprintf(`CREATE VIEW ranking.ranks_%d AS
 		SELECT
 			user_pid,
 			unique_id,
@@ -236,7 +236,7 @@ func createCategory(category uint32, golfScoring bool) error {
 func InsertRankingByPIDAndRankingScoreData(pid nextypes.PID, rankingScoreData types.RankingScoreData, _uniqueID nextypes.UInt64) error {
 	globals.Logger.Info(rankingScoreData.FormatToString(1))
 	now := time.Now()
-	res, err := Postgres.Exec(`
+	res, err := globals.Postgres.Exec(`
 		UPDATE ranking.scores SET score = $1, groups = $2, param = $3, update_date = $4
 		WHERE category = $5 AND user_pid = $6
 	`,
@@ -262,7 +262,7 @@ func InsertRankingByPIDAndRankingScoreData(pid nextypes.PID, rankingScoreData ty
 	}
 
 	var categoryExists bool
-	err = Postgres.QueryRow(`SELECT EXISTS(SELECT 1 FROM ranking.categories WHERE category = $1)`, rankingScoreData.Category).Scan(&categoryExists)
+	err = globals.Postgres.QueryRow(`SELECT EXISTS(SELECT 1 FROM ranking.categories WHERE category = $1)`, rankingScoreData.Category).Scan(&categoryExists)
 	if err != nil {
 		return err
 	}
@@ -277,7 +277,7 @@ func InsertRankingByPIDAndRankingScoreData(pid nextypes.PID, rankingScoreData ty
 		}
 	}
 
-	_, err = Postgres.Exec(`
+	_, err = globals.Postgres.Exec(`
 			INSERT INTO ranking.scores (user_pid, category, groups, score, param, creation_date, update_date) 
 			VALUES ($1, $2, $3, $4, $5, $6, $6)
 	`,
@@ -298,7 +298,7 @@ func GetCommonData(uniqueID nextypes.UInt64) (nextypes.Buffer, error) {
 }
 
 func UploadCommonData(pid nextypes.PID, _uniqueID nextypes.UInt64, commonData nextypes.Buffer) error {
-	_, err := Postgres.Exec(`
+	_, err := globals.Postgres.Exec(`
 		UPDATE ranking.scores SET common_data = $1 WHERE user_pid = $2
 	`,
 		commonData,
