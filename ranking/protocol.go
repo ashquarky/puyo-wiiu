@@ -12,6 +12,10 @@ func NewRankingProtocol(protocol *commonranking.CommonProtocol) error {
 
 	protocol.InsertRankingByPIDAndRankingScoreData = InsertRankingByPIDAndRankingScoreData
 	protocol.GetRankingsAndCountByCategoryAndRankingOrderParam = GetRankingsAndCountByCategoryAndRankingOrderParam
+	protocol.GetNearbyRankingsAndCountByCategoryAndRankingOrderParam = GetNearbyRankingsAndCountByCategoryAndRankingOrderParam
+	// protocol.GetFriendsRankingsAndCountByCategoryAndRankingOrderParam
+	// protocol.GetNearbyFriendsRankingsAndCountByCategoryAndRankingOrderParam
+	// protocol.GetOwnRankingByCategoryAndRankingOrderParam
 	protocol.UploadCommonData = UploadCommonData
 
 	return nil

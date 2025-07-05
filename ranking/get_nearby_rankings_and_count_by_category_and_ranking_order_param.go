@@ -8,16 +8,17 @@ import (
 	rankingtypes "github.com/PretendoNetwork/nex-protocols-go/v2/ranking/types"
 )
 
-var getGlobalRankings *sql.Stmt
+var getNearbyGlobalRankings *sql.Stmt
 
-func GetRankingsAndCountByCategoryAndRankingOrderParam(category types.UInt32, rankingOrderParam rankingtypes.RankingOrderParam) (types.List[rankingtypes.RankingRankData], uint32, error) {
-	rows, err := getGlobalRankings.Query(
+func GetNearbyRankingsAndCountByCategoryAndRankingOrderParam(pid types.PID, category types.UInt32, rankingOrderParam rankingtypes.RankingOrderParam) (types.List[rankingtypes.RankingRankData], uint32, error) {
+	rows, err := getNearbyGlobalRankings.Query(
 		category,
 		rankingOrderParam.OrderCalculation == 0,
 		rankingOrderParam.GroupIndex,
 		rankingOrderParam.GroupNum,
 		rankingOrderParam.Offset,
 		rankingOrderParam.Length,
+		pid,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, 0, nil
@@ -29,7 +30,7 @@ func GetRankingsAndCountByCategoryAndRankingOrderParam(category types.UInt32, ra
 	return parseRankingList(rows, int(rankingOrderParam.Length))
 }
 
-func initGetGlobalRankingsStmt() error {
+func initGetNearbyGlobalRankingsStmt() error {
 	stmt, err := Database.Prepare(`
 		WITH scores AS (
 		    WITH cat AS (
@@ -53,6 +54,13 @@ func initGetGlobalRankingsStmt() error {
 				category = $1 AND
 				/* $3: GroupIndex; $4: GroupNum */
 				CASE WHEN $3 < 2 AND length(groups) >= 2 THEN get_byte(groups, $3) = $4 ELSE TRUE END 
+		), central_user AS (
+		    SELECT
+		        scores.ord,
+		        GREATEST(scores.ord - $6 / 2, 1) AS min_ord,
+		        LEAST(scores.ord + $6 / 2, (SELECT max(scores.ord) FROM scores)) AS max_ord
+			FROM scores
+			WHERE owner_pid = $7
 		)
 		SELECT
 		    scores.unique_id,
@@ -66,11 +74,14 @@ func initGetGlobalRankingsStmt() error {
 		    scores.ord,
 		    /* highly unfortunate */
 			COUNT(*) OVER () AS count
-		FROM scores
+		FROM central_user, scores
 		    LEFT OUTER JOIN ranking.common_data
 			ON scores.unique_id = ranking.common_data.unique_id
 		    AND scores.owner_pid = ranking.common_data.owner_pid
-		ORDER BY ord
+		WHERE
+		    scores.ord >= central_user.min_ord AND
+		    scores.ord <= central_user.max_ord
+		ORDER BY scores.ord
 		OFFSET $5
 		LIMIT $6
 	`)
@@ -78,6 +89,6 @@ func initGetGlobalRankingsStmt() error {
 		return err
 	}
 
-	getGlobalRankings = stmt
+	getNearbyGlobalRankings = stmt
 	return nil
 }

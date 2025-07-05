@@ -2,7 +2,11 @@ package ranking
 
 import (
 	"database/sql"
+	"github.com/PretendoNetwork/nex-go/v2"
+	"github.com/PretendoNetwork/nex-go/v2/types"
+	rankingtypes "github.com/PretendoNetwork/nex-protocols-go/v2/ranking/types"
 	"github.com/PretendoNetwork/puyo-puyo-tetris/globals"
+	"time"
 )
 
 var Database *sql.DB
@@ -12,6 +16,7 @@ func initDatabase() error {
 		initTables,
 		initInsertScoreStmt,
 		initGetGlobalRankingsStmt,
+		initGetNearbyGlobalRankingsStmt,
 		initInsertCommonDataStmt,
 	}
 
@@ -82,4 +87,35 @@ func initTables() error {
 	globals.Logger.Success("Postgres tables created")
 
 	return nil
+}
+
+func parseRankingList(rows *sql.Rows, lengthHint int) (types.List[rankingtypes.RankingRankData], uint32, error) {
+	totalCount := uint32(0)
+	results := make(types.List[rankingtypes.RankingRankData], 0, lengthHint)
+	for rows.Next() {
+		result := rankingtypes.NewRankingRankData()
+		var updateDate time.Time
+
+		err := rows.Scan(
+			&result.UniqueID,
+			&result.PrincipalID,
+			&result.Category,
+			&result.Groups,
+			&result.Score,
+			&result.Param,
+			&updateDate,
+			&result.CommonData,
+			&result.Order,
+			&totalCount,
+		)
+		if err != nil {
+			return nil, 0, nex.NewError(nex.ResultCodes.Core.SystemError, err.Error())
+		}
+
+		result.UpdateTime = result.UpdateTime.FromTimestamp(updateDate)
+
+		results = append(results, result)
+	}
+
+	return results, totalCount, nil
 }
