@@ -270,7 +270,7 @@ func InsertRankingByPIDAndRankingScoreData(pid nextypes.PID, rankingScoreData ty
 	if !categoryExists {
 		err = createCategory(
 			uint32(rankingScoreData.Category),
-			rankingScoreData.OrderBy == 1,
+			rankingScoreData.OrderBy == 0,
 		)
 		if err != nil {
 			return err
