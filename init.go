@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/PretendoNetwork/nex-protocols-common-go/v2/datastore"
+	common_globals "github.com/PretendoNetwork/nex-protocols-common-go/v2/globals"
 	puyodatastore "github.com/PretendoNetwork/puyo-puyo-tetris/datastore"
 	"os"
 	"strconv"
@@ -33,6 +33,9 @@ func init() {
 	s3Endpoint := os.Getenv("PN_PUYOPUYOTETRIS_CONFIG_S3_ENDPOINT")
 	s3AccessKey := os.Getenv("PN_PUYOPUYOTETRIS_CONFIG_S3_ACCESS_KEY")
 	s3AccessSecret := os.Getenv("PN_PUYOPUYOTETRIS_CONFIG_S3_ACCESS_SECRET")
+	s3Bucket := os.Getenv("PN_PUYOPUYOTETRIS_CONFIG_S3_BUCKET")
+	s3KeyBase := os.Getenv("PN_PUYOPUYOTETRIS_CONFIG_S3_KEY_BASE")
+	s3Insecure := os.Getenv("PN_PUYOPUYOTETRIS_CONFIG_S3_INSECURE")
 
 	kerberosPassword := os.Getenv("PN_PUYOPUYOTETRIS_KERBEROS_PASSWORD")
 	authenticationServerPort := os.Getenv("PN_PUYOPUYOTETRIS_AUTHENTICATION_SERVER_PORT")
@@ -133,11 +136,16 @@ func init() {
 		globals.Logger.Warning("This is insecure and could allow ban bypasses!")
 	}
 
+	secure := s3Insecure != "1"
+	if !secure {
+		globals.Logger.Warning("S3 is set to use HTTP! This is insecure.")
+	}
+
 	staticCredentials := credentials.NewStaticV4(s3AccessKey, s3AccessSecret, "")
 
 	minIOClient, err := minio.New(s3Endpoint, &minio.Options{
 		Creds:  staticCredentials,
-		Secure: true,
+		Secure: secure,
 	})
 
 	if err != nil {
@@ -145,7 +153,9 @@ func init() {
 	}
 
 	globals.MinIOClient = minIOClient
-	globals.Presigner = datastore.NewS3Presigner(globals.MinIOClient)
+	globals.S3Presigner = common_globals.NewMinIOPresigner(minIOClient)
+	globals.S3Bucket = s3Bucket
+	globals.S3KeyBase = s3KeyBase
 
 	puyodatastore.ConnectPostgres()
 }

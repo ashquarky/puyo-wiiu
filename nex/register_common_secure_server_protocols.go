@@ -3,11 +3,15 @@ package nex
 import (
 	"github.com/PretendoNetwork/nex-go/v2"
 	"github.com/PretendoNetwork/nex-go/v2/types"
+	commondatastore "github.com/PretendoNetwork/nex-protocols-common-go/v2/datastore"
+	common_globals "github.com/PretendoNetwork/nex-protocols-common-go/v2/globals"
 	commonmatchmaking "github.com/PretendoNetwork/nex-protocols-common-go/v2/match-making"
 	commonmatchmakingext "github.com/PretendoNetwork/nex-protocols-common-go/v2/match-making-ext"
 	commonmatchmakeextension "github.com/PretendoNetwork/nex-protocols-common-go/v2/matchmake-extension"
+	"github.com/PretendoNetwork/nex-protocols-common-go/v2/matchmake-extension/database"
 	commonranking "github.com/PretendoNetwork/nex-protocols-common-go/v2/ranking"
 	commonsecure "github.com/PretendoNetwork/nex-protocols-common-go/v2/secure-connection"
+	datastore "github.com/PretendoNetwork/nex-protocols-go/v2/datastore"
 	matchmaking "github.com/PretendoNetwork/nex-protocols-go/v2/match-making"
 	matchmakingext "github.com/PretendoNetwork/nex-protocols-go/v2/match-making-ext"
 	matchmakeextension "github.com/PretendoNetwork/nex-protocols-go/v2/matchmake-extension"
@@ -22,44 +26,50 @@ import (
 	matchmakingtypes "github.com/PretendoNetwork/nex-protocols-go/v2/match-making/types"
 )
 
-//func MatchmakeExtensionCloseParticipation(err error, packet nex.PacketInterface, callID uint32, gid *types.PrimitiveU32) (*nex.RMCMessage, *nex.Error) {
-//	if err != nil {
-//		globals.Logger.Error(err.Error())
-//		return nil, nex.NewError(nex.ResultCodes.Core.InvalidArgument, "change_error")
-//	}
-//
-//	session, ok := commonglobals.Sessions[gid.Value]
-//	if !ok {
-//		return nil, nex.NewError(nex.ResultCodes.RendezVous.SessionVoid, "change_error")
-//	}
-//
-//	connection := packet.Sender().(*nex.PRUDPConnection)
-//	endpoint := connection.Endpoint().(*nex.PRUDPEndPoint)
-//
-//	// * PUYOPUYOTETRIS has everyone send CloseParticipation here, not just the owner of the room.
-//	// * So, if a non-owner asks, just lie and claim success without actually changing anything.
-//	if !session.GameMatchmakeSession.Gathering.OwnerPID.Equals(connection.PID()) {
-//		session.GameMatchmakeSession.OpenParticipation = types.NewPrimitiveBool(false)
-//	}
-//
-//	rmcResponse := nex.NewRMCSuccess(endpoint, nil)
-//	rmcResponse.ProtocolID = matchmakeextension.ProtocolID
-//	rmcResponse.MethodID = matchmakeextension.MethodCloseParticipation
-//	rmcResponse.CallID = callID
-//
-//	return rmcResponse, nil
-//}
+func MatchmakeExtensionCloseParticipation(err error, packet nex.PacketInterface, callID uint32, gid types.UInt32) (*nex.RMCMessage, *nex.Error) {
+	if err != nil {
+		common_globals.Logger.Error(err.Error())
+		return nil, nex.NewError(nex.ResultCodes.Core.InvalidArgument, "change_error")
+	}
+
+	connection := packet.Sender().(*nex.PRUDPConnection)
+	manager := globals.MatchmakingManager
+	endpoint := connection.Endpoint().(*nex.PRUDPEndPoint)
+
+	manager.Mutex.Lock()
+
+	session, _, nexError := database.GetMatchmakeSessionByID(manager, endpoint, uint32(gid))
+	if nexError != nil {
+		manager.Mutex.Unlock()
+		return nil, nexError
+	}
+
+	// * PUYOPUYOTETRIS has everyone send CloseParticipation here, not just the owner of the room.
+	// * So, if a non-owner asks, just lie and claim success without actually changing anything.
+	if session.Gathering.OwnerPID.Equals(connection.PID()) {
+		nexError = database.UpdateParticipation(manager, uint32(gid), false)
+		if nexError != nil {
+			manager.Mutex.Unlock()
+			return nil, nexError
+		}
+	}
+
+	manager.Mutex.Unlock()
+
+	rmcResponse := nex.NewRMCSuccess(endpoint, nil)
+	rmcResponse.ProtocolID = matchmakeextension.ProtocolID
+	rmcResponse.MethodID = matchmakeextension.MethodCloseParticipation
+	rmcResponse.CallID = callID
+
+	return rmcResponse, nil
+}
 
 func CreateReportDBRecord(_ types.PID, _ types.UInt32, _ types.QBuffer) error {
 	return nil
 }
 
 // TO DO:
-// How do clubs work?
-// GetObjectInfoByDataID
-// UpdateObjectPeriodByDataIDWithPassword
-// UpdateObjectMetaBinaryByDataIDWithPassword
-// UpdateObjectDataTypeByDataIDWithPassword
+// Persistent gatherings for clubs
 
 func registerCommonSecureServerProtocols() {
 	secureProtocol := secure.NewProtocol()
@@ -68,6 +78,12 @@ func registerCommonSecureServerProtocols() {
 	commonSecureProtocol.EnableInsecureRegister() // Game uses TicketGranting::LoginEx
 
 	commonSecureProtocol.CreateReportDBRecord = CreateReportDBRecord
+
+	// DataStore - player stats, replays, clubs
+	datastoreProtocol := datastore.NewProtocol()
+	globals.SecureEndpoint.RegisterServiceProtocol(datastoreProtocol)
+	commonDatastoreProtocol := commondatastore.NewCommonProtocol(datastoreProtocol)
+	commonDatastoreProtocol.SetManager(globals.DatastoreManager)
 
 	// Ranking - ??
 	rankingProtocol := ranking.NewProtocol()
@@ -101,19 +117,16 @@ func registerCommonSecureServerProtocols() {
 	globals.SecureEndpoint.RegisterServiceProtocol(matchmakeExtensionProtocol)
 	commonMatchmakeExtensionProtocol := commonmatchmakeextension.NewCommonProtocol(matchmakeExtensionProtocol)
 	// * Handle custom CloseParticipation behaviour
-	//matchmakeExtensionProtocol.SetHandlerCloseParticipation(MatchmakeExtensionCloseParticipation)
+	matchmakeExtensionProtocol.SetHandlerCloseParticipation(MatchmakeExtensionCloseParticipation)
 	commonMatchmakeExtensionProtocol.SetManager(globals.MatchmakingManager)
+	commonMatchmakeExtensionProtocol.CleanupMatchmakeSessionSearchCriterias = func(searchCriterias types.List[matchmakingtypes.MatchmakeSessionSearchCriteria]) {
+		// lol ok
+	}
 
 	commonMatchmakeExtensionProtocol.OnAfterAutoMatchmakeWithSearchCriteriaPostpone = func(packet nex.PacketInterface, lstSearchCriteria types.List[matchmakingtypes.MatchmakeSessionSearchCriteria], anyGathering matchmakingtypes.GatheringHolder, strMessage types.String) {
 		globals.Logger.Info("Matchmake search criteria:")
 		for _, criteria := range lstSearchCriteria {
 			globals.Logger.Info(criteria.FormatToString(1))
 		}
-
-		//globals.Logger.Info("Active matchmaking sessions:")
-		//for _, session := range commonglobals.Sessions {
-		//	globals.Logger.Info(session.GameMatchmakeSession.FormatToString(1))
-		//}
 	}
-
 }

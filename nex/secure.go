@@ -38,6 +38,8 @@ func StartSecureServer() {
 	})
 
 	globals.MatchmakingManager = common_globals.NewMatchmakingManager(globals.SecureEndpoint, globals.Postgres)
+	globals.DatastoreManager = common_globals.NewDataStoreManager(globals.SecureEndpoint, globals.Postgres)
+	globals.DatastoreManager.SetS3Config(globals.S3Bucket, globals.S3KeyBase, globals.S3Presigner)
 
 	registerCommonSecureServerProtocols()
 
