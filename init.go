@@ -1,10 +1,10 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/hex"
 	"fmt"
-	common_globals "github.com/PretendoNetwork/nex-protocols-common-go/v2/globals"
-	puyodatastore "github.com/PretendoNetwork/puyo-puyo-tetris/datastore"
+	commonglobals "github.com/PretendoNetwork/nex-protocols-common-go/v2/globals"
 	"os"
 	"strconv"
 	"strings"
@@ -153,9 +153,13 @@ func init() {
 	}
 
 	globals.MinIOClient = minIOClient
-	globals.S3Presigner = common_globals.NewMinIOPresigner(minIOClient)
+	globals.S3Presigner = commonglobals.NewMinIOPresigner(minIOClient)
 	globals.S3Bucket = s3Bucket
 	globals.S3KeyBase = s3KeyBase
 
-	puyodatastore.ConnectPostgres()
+	globals.Postgres, err = sql.Open("postgres", os.Getenv("PN_PUYOPUYOTETRIS_POSTGRES_URI"))
+	if err != nil {
+		globals.Logger.Critical(err.Error())
+	}
+	globals.Logger.Success("Connected to Postgres!")
 }

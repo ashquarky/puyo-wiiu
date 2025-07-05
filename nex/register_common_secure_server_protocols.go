@@ -4,7 +4,7 @@ import (
 	"github.com/PretendoNetwork/nex-go/v2"
 	"github.com/PretendoNetwork/nex-go/v2/types"
 	commondatastore "github.com/PretendoNetwork/nex-protocols-common-go/v2/datastore"
-	common_globals "github.com/PretendoNetwork/nex-protocols-common-go/v2/globals"
+	commonglobals "github.com/PretendoNetwork/nex-protocols-common-go/v2/globals"
 	commonmatchmaking "github.com/PretendoNetwork/nex-protocols-common-go/v2/match-making"
 	commonmatchmakingext "github.com/PretendoNetwork/nex-protocols-common-go/v2/match-making-ext"
 	commonmatchmakeextension "github.com/PretendoNetwork/nex-protocols-common-go/v2/matchmake-extension"
@@ -17,8 +17,8 @@ import (
 	matchmakeextension "github.com/PretendoNetwork/nex-protocols-go/v2/matchmake-extension"
 	ranking "github.com/PretendoNetwork/nex-protocols-go/v2/ranking"
 	secure "github.com/PretendoNetwork/nex-protocols-go/v2/secure-connection"
-	puyodatastore "github.com/PretendoNetwork/puyo-puyo-tetris/datastore"
 	"github.com/PretendoNetwork/puyo-puyo-tetris/globals"
+	megaranking "github.com/PretendoNetwork/puyo-puyo-tetris/ranking"
 
 	commonnattraversal "github.com/PretendoNetwork/nex-protocols-common-go/v2/nat-traversal"
 	nattraversal "github.com/PretendoNetwork/nex-protocols-go/v2/nat-traversal"
@@ -28,7 +28,7 @@ import (
 
 func MatchmakeExtensionCloseParticipation(err error, packet nex.PacketInterface, callID uint32, gid types.UInt32) (*nex.RMCMessage, *nex.Error) {
 	if err != nil {
-		common_globals.Logger.Error(err.Error())
+		commonglobals.Logger.Error(err.Error())
 		return nil, nex.NewError(nex.ResultCodes.Core.InvalidArgument, "change_error")
 	}
 
@@ -85,18 +85,15 @@ func registerCommonSecureServerProtocols() {
 	commonDatastoreProtocol := commondatastore.NewCommonProtocol(datastoreProtocol)
 	commonDatastoreProtocol.SetManager(globals.DatastoreManager)
 
-	// Ranking - ??
+	// Ranking - National Puzzle League leaderboards
 	rankingProtocol := ranking.NewProtocol()
 	globals.SecureEndpoint.RegisterServiceProtocol(rankingProtocol)
 	commonRankingProtocol := commonranking.NewCommonProtocol(rankingProtocol)
-	commonRankingProtocol.GetRankingsAndCountByCategoryAndRankingOrderParam = puyodatastore.GetRankingsAndCountByCategoryAndRankingOrderParam
-	commonRankingProtocol.GetOwnRankingByCategoryAndRankingOrderParam = puyodatastore.GetOwnRankingByCategoryAndRankingOrderParam
-	commonRankingProtocol.GetNearbyFriendsRankingsAndCountByCategoryAndRankingOrderParam = puyodatastore.GetNearbyFriendsRankingsAndCountByCategoryAndRankingOrderParam
-	commonRankingProtocol.GetFriendsRankingsAndCountByCategoryAndRankingOrderParam = puyodatastore.GetFriendsRankingsAndCountByCategoryAndRankingOrderParam
-	commonRankingProtocol.GetNearbyRankingsAndCountByCategoryAndRankingOrderParam = puyodatastore.GetNearbyRankingsAndCountByCategoryAndRankingOrderParam
-	commonRankingProtocol.InsertRankingByPIDAndRankingScoreData = puyodatastore.InsertRankingByPIDAndRankingScoreData
-	commonRankingProtocol.UploadCommonData = puyodatastore.UploadCommonData
-	commonRankingProtocol.GetCommonData = puyodatastore.GetCommonData
+	megaranking.Database = globals.Postgres
+	err := megaranking.NewRankingProtocol(commonRankingProtocol)
+	if err != nil {
+		globals.Logger.Error(err.Error())
+	}
 
 	// Matchmaking stuff - National Puzzle League
 	natTraversalProtocol := nattraversal.NewProtocol()
