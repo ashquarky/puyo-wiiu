@@ -17,6 +17,9 @@ func initDatabase() error {
 		initInsertScoreStmt,
 		initGetGlobalRankingsStmt,
 		initGetNearbyGlobalRankingsStmt,
+		initGetFriendsRankingsStmt,
+		initGetNearbyFriendsRankingsStmt,
+		initGetOwnRankingStmt,
 		initInsertCommonDataStmt,
 	}
 
@@ -64,7 +67,7 @@ func initTables() error {
 
 	_, err = Database.Exec(`CREATE TABLE IF NOT EXISTS ranking.categories (
 		category int PRIMARY KEY,   
-    	golf_scoring boolean,
+		golf_scoring boolean,
 		creation_date timestamp                 
 	)`)
 	if err != nil {
@@ -72,10 +75,10 @@ func initTables() error {
 	}
 
 	_, err = Database.Exec(`CREATE TABLE IF NOT EXISTS ranking.common_data (
-    	deleted boolean NOT NULL DEFAULT FALSE,
+		deleted boolean NOT NULL DEFAULT FALSE,
 		unique_id bigint,
 		owner_pid bigint,
-    	data bytea,
+		data bytea,
 		creation_date timestamp,
 		update_date timestamp,
 		PRIMARY KEY (owner_pid, unique_id)

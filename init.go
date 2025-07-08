@@ -9,7 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	pb "github.com/PretendoNetwork/grpc/go/account"
+	pbaccount "github.com/PretendoNetwork/grpc/go/account"
+	pbfriends "github.com/PretendoNetwork/grpc/go/friends"
 	"github.com/PretendoNetwork/plogger-go"
 	"github.com/PretendoNetwork/puyo-puyo-tetris/globals"
 	"github.com/joho/godotenv"
@@ -44,6 +45,9 @@ func init() {
 	accountGRPCHost := os.Getenv("PN_PUYOPUYOTETRIS_ACCOUNT_GRPC_HOST")
 	accountGRPCPort := os.Getenv("PN_PUYOPUYOTETRIS_ACCOUNT_GRPC_PORT")
 	accountGRPCAPIKey := os.Getenv("PN_PUYOPUYOTETRIS_ACCOUNT_GRPC_API_KEY")
+	friendsGRPCHost := os.Getenv("PN_PUYOPUYOTETRIS_FRIENDS_GRPC_HOST")
+	friendsGRPCPort := os.Getenv("PN_PUYOPUYOTETRIS_FRIENDS_GRPC_PORT")
+	friendsGRPCAPIKey := os.Getenv("PN_PUYOPUYOTETRIS_FRIENDS_GRPC_API_KEY")
 	tokenAesKey := os.Getenv("PN_PUYOPUYOTETRIS_AES_KEY")
 	localAuthMode := os.Getenv("PN_PUYOPUYOTETRIS_LOCAL_AUTH")
 
@@ -114,9 +118,20 @@ func init() {
 		os.Exit(0)
 	}
 
-	globals.GRPCAccountClient = pb.NewAccountClient(globals.GRPCAccountClientConnection)
+	globals.GRPCAccountClient = pbaccount.NewAccountClient(globals.GRPCAccountClientConnection)
 	globals.GRPCAccountCommonMetadata = metadata.Pairs(
 		"X-API-Key", accountGRPCAPIKey,
+	)
+
+	globals.GRPCFriendsClientConnection, err = grpc.Dial(fmt.Sprintf("%s:%s", friendsGRPCHost, friendsGRPCPort), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		globals.Logger.Criticalf("Failed to connect to account gRPC server: %v", err)
+		os.Exit(0)
+	}
+
+	globals.GRPCFriendsClient = pbfriends.NewFriendsClient(globals.GRPCFriendsClientConnection)
+	globals.GRPCFriendsCommonMetadata = metadata.Pairs(
+		"X-API-Key", friendsGRPCAPIKey,
 	)
 
 	if strings.TrimSpace(tokenAesKey) == "" {

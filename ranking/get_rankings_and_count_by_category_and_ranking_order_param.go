@@ -32,12 +32,12 @@ func GetRankingsAndCountByCategoryAndRankingOrderParam(category types.UInt32, ra
 func initGetGlobalRankingsStmt() error {
 	stmt, err := Database.Prepare(`
 		WITH scores AS (
-		    WITH cat AS (
-		    	SELECT golf_scoring FROM ranking.categories WHERE category = $1
+			WITH cat AS (
+				SELECT golf_scoring FROM ranking.categories WHERE category = $1
 			)
-		    SELECT
-		        *,
-		        CASE WHEN $2 THEN
+			SELECT
+				*,
+				CASE WHEN $2 THEN
 					RANK() OVER (ORDER BY 
 						CASE WHEN cat.golf_scoring THEN ranking.scores.score END DESC,
 						CASE WHEN NOT cat.golf_scoring THEN ranking.scores.score END ASC
@@ -55,21 +55,21 @@ func initGetGlobalRankingsStmt() error {
 				CASE WHEN $3 < 2 AND length(groups) >= 2 THEN get_byte(groups, $3) = $4 ELSE TRUE END 
 		)
 		SELECT
-		    scores.unique_id,
-		    scores.owner_pid,
-		    scores.category,
-		    scores.groups,
-		    scores.score,
-		    scores.param,
-		    scores.update_date,
-		    COALESCE(ranking.common_data.data, ''::bytea),
-		    scores.ord,
-		    /* highly unfortunate */
+			scores.unique_id,
+			scores.owner_pid,
+			scores.category,
+			scores.groups,
+			scores.score,
+			scores.param,
+			scores.update_date,
+			COALESCE(ranking.common_data.data, ''::bytea),
+			scores.ord,
+			/* highly unfortunate */
 			COUNT(*) OVER () AS count
 		FROM scores
-		    LEFT OUTER JOIN ranking.common_data
+			LEFT OUTER JOIN ranking.common_data
 			ON scores.unique_id = ranking.common_data.unique_id
-		    AND scores.owner_pid = ranking.common_data.owner_pid
+			AND scores.owner_pid = ranking.common_data.owner_pid
 		ORDER BY ord
 		OFFSET $5
 		LIMIT $6

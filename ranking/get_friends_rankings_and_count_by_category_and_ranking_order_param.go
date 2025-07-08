@@ -6,12 +6,15 @@ import (
 	"github.com/PretendoNetwork/nex-go/v2"
 	"github.com/PretendoNetwork/nex-go/v2/types"
 	rankingtypes "github.com/PretendoNetwork/nex-protocols-go/v2/ranking/types"
+	"github.com/PretendoNetwork/puyo-puyo-tetris/globals"
 )
 
-var getNearbyGlobalRankings *sql.Stmt
+var getFriendsRankings *sql.Stmt
 
-func GetNearbyRankingsAndCountByCategoryAndRankingOrderParam(pid types.PID, category types.UInt32, rankingOrderParam rankingtypes.RankingOrderParam) (types.List[rankingtypes.RankingRankData], uint32, error) {
-	rows, err := getNearbyGlobalRankings.Query(
+func GetFriendsRankingsAndCountByCategoryAndRankingOrderParam(pid types.PID, category types.UInt32, rankingOrderParam rankingtypes.RankingOrderParam) (types.List[rankingtypes.RankingRankData], uint32, error) {
+	friends := globals.GetUserFriendPIDs(uint32(pid))
+
+	rows, err := getFriendsRankings.Query(
 		category,
 		rankingOrderParam.OrderCalculation == 0,
 		rankingOrderParam.GroupIndex,
@@ -19,6 +22,7 @@ func GetNearbyRankingsAndCountByCategoryAndRankingOrderParam(pid types.PID, cate
 		rankingOrderParam.Offset,
 		rankingOrderParam.Length,
 		pid,
+		friends,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, 0, nil
@@ -30,7 +34,7 @@ func GetNearbyRankingsAndCountByCategoryAndRankingOrderParam(pid types.PID, cate
 	return parseRankingList(rows, int(rankingOrderParam.Length))
 }
 
-func initGetNearbyGlobalRankingsStmt() error {
+func initGetFriendsRankingsStmt() error {
 	stmt, err := Database.Prepare(`
 		WITH scores AS (
 			WITH cat AS (
@@ -51,6 +55,8 @@ func initGetNearbyGlobalRankingsStmt() error {
 				END AS ord
 			FROM cat, ranking.scores
 			WHERE
+			    /* $7: requester pid; $8: friends list */
+			    (owner_pid = ANY($8) OR owner_pid = $7) AND
 				category = $1 AND
 				/* $3: GroupIndex; $4: GroupNum */
 				CASE WHEN $3 < 2 AND length(groups) >= 2 THEN get_byte(groups, $3) = $4 ELSE TRUE END
@@ -90,6 +96,6 @@ func initGetNearbyGlobalRankingsStmt() error {
 		return err
 	}
 
-	getNearbyGlobalRankings = stmt
+	getFriendsRankings = stmt
 	return nil
 }
